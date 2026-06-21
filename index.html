@@ -13,10 +13,6 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.css"
     />
-    <script
-      type="module"
-      src="https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js"
-    ></script>
     <style>
       html,
       body {
@@ -33,12 +29,27 @@
   </head>
   <body>
     <noscript>이 계산기를 사용하려면 브라우저에서 JavaScript를 허용해야 합니다.</noscript>
-    <streamlit-app>
-      <app-file name="app.py" url="./app.py" entrypoint></app-file>
-      <app-file name="loan_logic.py" url="./loan_logic.py"></app-file>
-      <app-file name="scenario_calculator.py" url="./scenario_calculator.py"></app-file>
-      <app-file name="format_utils.py" url="./format_utils.py"></app-file>
-      <app-requirements>pandas</app-requirements>
-    </streamlit-app>
+    <div id="root"></div>
+    <script type="module">
+      import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js";
+
+      mount(
+        {
+          entrypoint: "app.py",
+          files: {
+            "app.py": { url: "./app.py" },
+            "loan_logic.py": { url: "./loan_logic.py" },
+            "scenario_calculator.py": { url: "./scenario_calculator.py" },
+            "format_utils.py": { url: "./format_utils.py" },
+          },
+          requirements: ["pandas"],
+          idbfsMountpoints: ["/mnt"],
+          streamlitConfig: {
+            "client.toolbarMode": "viewer",
+          },
+        },
+        document.getElementById("root"),
+      );
+    </script>
   </body>
 </html>

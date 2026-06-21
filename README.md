@@ -48,6 +48,8 @@ https://jjuhee0722-cpu.github.io/real-estate-scenario-app/
 
 `main` 브랜치에 변경사항을 푸시하면 GitHub Pages가 자동으로 최신 파일을 반영합니다. 첫 접속은 브라우저용 Python 런타임을 내려받기 때문에 잠시 걸릴 수 있습니다.
 
+입력값은 공개 웹앱에서 자동으로 현재 브라우저의 IndexedDB에 저장됩니다. 같은 기기와 브라우저에서 다시 접속하면 마지막 입력값이 복원되며, 사이드바의 **저장값 초기화** 버튼으로 기본값으로 되돌릴 수 있습니다. 다른 기기·브라우저와는 자동 동기화되지 않으며 브라우저 데이터 삭제 시 저장값도 삭제됩니다.
+
 Streamlit Community Cloud 방식으로 별도 배포하려면 저장소 루트의 `requirements.txt`를 사용할 수 있습니다.
 
 1. 이 프로젝트를 GitHub 저장소에 올립니다.

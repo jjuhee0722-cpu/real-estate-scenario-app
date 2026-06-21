@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
 import pandas as pd
 import streamlit as st
+import sys
 from typing import Optional
 
 from format_utils import format_amount, format_annual, format_gap, format_monthly, format_rate
@@ -13,6 +16,59 @@ from scenario_calculator import calculate_refinance, calculate_scenario
 
 
 st.set_page_config(page_title="부동산 주거 시나리오 비교", page_icon="🏠", layout="wide")
+
+BROWSER_STORAGE_PATH = "/mnt/real_estate_inputs.json"
+IS_BROWSER_RUNTIME = sys.platform == "emscripten"
+
+
+def load_saved_inputs() -> dict:
+    """stlite 브라우저 저장소에서 이전 입력값을 읽는다."""
+    if not IS_BROWSER_RUNTIME:
+        return {}
+    try:
+        with open(BROWSER_STORAGE_PATH, "r", encoding="utf-8") as saved_file:
+            data = json.load(saved_file)
+        return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+SAVED_INPUTS = load_saved_inputs()
+
+
+def saved_value(key: str, default):
+    return SAVED_INPUTS.get(key, default)
+
+
+def saved_index(key: str, options: list, default_index: int) -> int:
+    value = saved_value(key, options[default_index])
+    try:
+        return options.index(value)
+    except ValueError:
+        return default_index
+
+
+def save_browser_inputs(values: dict) -> None:
+    """공개 stlite 앱에서 입력값을 IndexedDB-backed 파일로 자동 저장한다."""
+    if not IS_BROWSER_RUNTIME:
+        return
+    try:
+        with open(BROWSER_STORAGE_PATH, "w", encoding="utf-8") as saved_file:
+            json.dump(values, saved_file, ensure_ascii=False, indent=2)
+    except OSError:
+        # 저장소 접근이 차단돼도 계산 기능은 계속 동작해야 한다.
+        pass
+
+
+def reset_browser_inputs() -> None:
+    if not IS_BROWSER_RUNTIME:
+        return
+    try:
+        os.remove(BROWSER_STORAGE_PATH)
+    except FileNotFoundError:
+        pass
+    st.session_state.clear()
+    st.rerun()
 
 st.markdown(
     """
@@ -57,7 +113,8 @@ def money_input(
 ) -> float:
     """만원 단위 입력. 기본 위치는 Sidebar이며 다른 컨테이너도 받을 수 있다."""
     target = container if container is not None else st.sidebar
-    return float(target.number_input(label, min_value=0, value=value, step=100, key=key, help=help_text))
+    initial_value = int(round(float(saved_value(key, value))))
+    return float(target.number_input(label, min_value=0, value=initial_value, step=100, key=key, help=help_text))
 
 
 def scenario_inputs(container, prefix: str, defaults: tuple[int, ...]) -> dict[str, float]:
@@ -81,20 +138,33 @@ def chart_data(a, b, fields: list[tuple[str, str]]) -> pd.DataFrame:
 
 st.sidebar.title("🏠 입력 조건")
 st.sidebar.caption("모든 금액의 입력 단위는 만원입니다.")
+if IS_BROWSER_RUNTIME:
+    st.sidebar.caption("💾 입력값은 현재 브라우저에 자동 저장됩니다.")
 
 basic_section = st.sidebar.expander("1. 기본 조건", expanded=True)
-marriage_planned = basic_section.checkbox("혼인신고 예정", value=True)
-independent_head = basic_section.checkbox("향후 세대주 독립 예정", value=True)
-user_home_count = basic_section.selectbox("사용자 현재 주택 소유", [0, 1, 2], format_func=lambda x: "무주택" if x == 0 else f"{x}주택")
-boyfriend_home_count = basic_section.selectbox("남자친구 현재 주택 소유", [0, 1, 2], index=1, format_func=lambda x: "무주택" if x == 0 else f"{x}주택")
+marriage_planned = basic_section.checkbox("혼인신고 예정", value=bool(saved_value("marriage_planned", True)), key="marriage_planned")
+independent_head = basic_section.checkbox("향후 세대주 독립 예정", value=bool(saved_value("independent_head", True)), key="independent_head")
+home_options = [0, 1, 2]
+user_home_count = basic_section.selectbox(
+    "사용자 현재 주택 소유", home_options, index=saved_index("user_home_count", home_options, 0),
+    format_func=lambda x: "무주택" if x == 0 else f"{x}주택", key="user_home_count",
+)
+boyfriend_home_count = basic_section.selectbox(
+    "남자친구 현재 주택 소유", home_options, index=saved_index("boyfriend_home_count", home_options, 1),
+    format_func=lambda x: "무주택" if x == 0 else f"{x}주택", key="boyfriend_home_count",
+)
 combined_assets = money_input("합산 순자산 (만원)", 20_000, "combined_assets", container=basic_section)
 user_income = money_input("사용자 연봉 (만원)", 4_400, "user_income", container=basic_section)
 boyfriend_income = money_input("남자친구 연봉 (만원)", 4_400, "boyfriend_income", container=basic_section)
 user_debt = money_input("사용자 기존 대출 잔액 (만원)", 0, "user_debt", container=basic_section)
 boyfriend_debt = money_input("남자친구 기존 부채 잔액 (만원)", 0, "boyfriend_debt", container=basic_section)
-loan_years = basic_section.selectbox("대출기간", [10, 15, 20, 30, 35, 40], index=3, format_func=lambda x: f"{x}년")
-regulated = basic_section.checkbox("규제지역", value=False)
-stress_dsr = basic_section.checkbox("스트레스 DSR 적용", value=True)
+loan_year_options = [10, 15, 20, 30, 35, 40]
+loan_years = basic_section.selectbox(
+    "대출기간", loan_year_options, index=saved_index("loan_years", loan_year_options, 3),
+    format_func=lambda x: f"{x}년", key="loan_years",
+)
+regulated = basic_section.checkbox("규제지역", value=bool(saved_value("regulated", False)), key="regulated")
+stress_dsr = basic_section.checkbox("스트레스 DSR 적용", value=bool(saved_value("stress_dsr", True)), key="stress_dsr")
 
 a_section = st.sidebar.expander("2. 시나리오 A 입력", expanded=True)
 a_section.caption("화정동 아파트 사용자 명의 단독 매수")
@@ -105,10 +175,20 @@ b_section.caption("남자친구 집 전세금 반환 후 입주")
 b_input = scenario_inputs(b_section, "b", (32_000, 15_000, 0, 17_000, 300, 0))
 
 refinance_section = st.sidebar.expander("4. 신생아 특례대출 대환", expanded=False)
-refinance_enabled = refinance_section.checkbox("신생아 특례대출 대환 적용", value=False)
-elapsed_years = float(refinance_section.number_input("대환 예상 시점 (년)", min_value=0.0, value=3.0, step=0.5))
-newborn_years = refinance_section.selectbox("신생아 특례대출 기간", NEWBORN_SPECIAL_LOAN["available_terms"], index=3, format_func=lambda x: f"{x}년")
-apply_fee = refinance_section.checkbox("중도상환수수료 반영", value=False)
+refinance_enabled = refinance_section.checkbox(
+    "신생아 특례대출 대환 적용", value=bool(saved_value("refinance_enabled", False)), key="refinance_enabled"
+)
+elapsed_years = float(refinance_section.number_input(
+    "대환 예상 시점 (년)", min_value=0.0, value=float(saved_value("elapsed_years", 3.0)), step=0.5, key="elapsed_years"
+))
+newborn_terms = NEWBORN_SPECIAL_LOAN["available_terms"]
+newborn_years = refinance_section.selectbox(
+    "신생아 특례대출 기간", newborn_terms, index=saved_index("newborn_years", newborn_terms, 3),
+    format_func=lambda x: f"{x}년", key="newborn_years",
+)
+apply_fee = refinance_section.checkbox(
+    "중도상환수수료 반영", value=bool(saved_value("apply_fee", False)), key="apply_fee"
+)
 refinance_other_cost = money_input("대환 관련 기타비용 (만원)", 0, "refinance_other_cost", container=refinance_section)
 
 combined_income = user_income + boyfriend_income
@@ -117,23 +197,89 @@ auto_newborn_rate = select_newborn_special_rate(combined_income)
 
 advanced = st.sidebar.expander("5. 고급 설정", expanded=False)
 with advanced:
-    override_gov = advanced.checkbox("정부지원 금리 수동 조정", value=False)
-    gov_rate_input = advanced.number_input("정부지원 대출 금리 (%)", 0.0, 20.0, auto_gov_rate * 100, 0.05) / 100
-    market_rate = advanced.number_input("시중 주담대 금리 (%)", 0.0, 20.0, POLICY["market_mortgage_rate"] * 100, 0.05) / 100
-    refund_rate = advanced.number_input("전세금 반환 대출 금리 (%)", 0.0, 20.0, POLICY["market_refund_loan_rate"] * 100, 0.05) / 100
-    override_newborn = advanced.checkbox("신생아 특례 금리 수동 조정", value=False)
-    newborn_rate_input = advanced.number_input("신생아 특례대출 금리 (%)", 0.0, 20.0, auto_newborn_rate * 100, 0.05) / 100
-    dsr_ratio = advanced.number_input("DSR 비율 (%)", 0.0, 100.0, POLICY["bank_dsr"] * 100, 1.0) / 100
-    stress_rate = advanced.number_input("스트레스 금리 (%p)", 0.0, 20.0, POLICY["stress_rate"] * 100, 0.1) / 100
+    override_gov = advanced.checkbox(
+        "정부지원 금리 수동 조정", value=bool(saved_value("override_gov", False)), key="override_gov"
+    )
+    gov_rate_input = advanced.number_input(
+        "정부지원 대출 금리 (%)", 0.0, 20.0, float(saved_value("gov_rate_pct", auto_gov_rate * 100)), 0.05,
+        key="gov_rate_pct",
+    ) / 100
+    market_rate = advanced.number_input(
+        "시중 주담대 금리 (%)", 0.0, 20.0, float(saved_value("market_rate_pct", POLICY["market_mortgage_rate"] * 100)), 0.05,
+        key="market_rate_pct",
+    ) / 100
+    refund_rate = advanced.number_input(
+        "전세금 반환 대출 금리 (%)", 0.0, 20.0, float(saved_value("refund_rate_pct", POLICY["market_refund_loan_rate"] * 100)), 0.05,
+        key="refund_rate_pct",
+    ) / 100
+    override_newborn = advanced.checkbox(
+        "신생아 특례 금리 수동 조정", value=bool(saved_value("override_newborn", False)), key="override_newborn"
+    )
+    newborn_rate_input = advanced.number_input(
+        "신생아 특례대출 금리 (%)", 0.0, 20.0, float(saved_value("newborn_rate_pct", auto_newborn_rate * 100)), 0.05,
+        key="newborn_rate_pct",
+    ) / 100
+    dsr_ratio = advanced.number_input(
+        "DSR 비율 (%)", 0.0, 100.0, float(saved_value("dsr_ratio_pct", POLICY["bank_dsr"] * 100)), 1.0,
+        key="dsr_ratio_pct",
+    ) / 100
+    stress_rate = advanced.number_input(
+        "스트레스 금리 (%p)", 0.0, 20.0, float(saved_value("stress_rate_pct", POLICY["stress_rate"] * 100)), 0.1,
+        key="stress_rate_pct",
+    ) / 100
     market_ltv_default = POLICY["market_ltv_regulated"] if regulated else POLICY["market_ltv_non_regulated"]
-    market_ltv = advanced.number_input("일반대출 LTV (%)", 0.0, 100.0, market_ltv_default * 100, 1.0) / 100
+    market_ltv = advanced.number_input(
+        "일반대출 LTV (%)", 0.0, 100.0, float(saved_value("market_ltv_pct", market_ltv_default * 100)), 1.0,
+        key="market_ltv_pct",
+    ) / 100
     newborn_max_loan = money_input(
         "신생아 특례 최대한도 (만원)",
         int(NEWBORN_SPECIAL_LOAN["max_loan"]),
         "newborn_max",
         container=advanced,
     )
-    fee_rate_input = advanced.number_input("중도상환수수료율 (%)", 0.0, 10.0, 0.0, 0.05) / 100
+    fee_rate_input = advanced.number_input(
+        "중도상환수수료율 (%)", 0.0, 10.0, float(saved_value("fee_rate_pct", 0.0)), 0.05,
+        key="fee_rate_pct",
+    ) / 100
+
+browser_inputs = {
+    "marriage_planned": marriage_planned,
+    "independent_head": independent_head,
+    "user_home_count": user_home_count,
+    "boyfriend_home_count": boyfriend_home_count,
+    "combined_assets": combined_assets,
+    "user_income": user_income,
+    "boyfriend_income": boyfriend_income,
+    "user_debt": user_debt,
+    "boyfriend_debt": boyfriend_debt,
+    "loan_years": loan_years,
+    "regulated": regulated,
+    "stress_dsr": stress_dsr,
+    **{f"a_{key}": value for key, value in a_input.items()},
+    **{f"b_{key}": value for key, value in b_input.items()},
+    "refinance_enabled": refinance_enabled,
+    "elapsed_years": elapsed_years,
+    "newborn_years": newborn_years,
+    "apply_fee": apply_fee,
+    "refinance_other_cost": refinance_other_cost,
+    "override_gov": override_gov,
+    "gov_rate_pct": gov_rate_input * 100,
+    "market_rate_pct": market_rate * 100,
+    "refund_rate_pct": refund_rate * 100,
+    "override_newborn": override_newborn,
+    "newborn_rate_pct": newborn_rate_input * 100,
+    "dsr_ratio_pct": dsr_ratio * 100,
+    "stress_rate_pct": stress_rate * 100,
+    "market_ltv_pct": market_ltv * 100,
+    "newborn_max": newborn_max_loan,
+    "fee_rate_pct": fee_rate_input * 100,
+}
+save_browser_inputs(browser_inputs)
+
+if IS_BROWSER_RUNTIME:
+    if st.sidebar.button("저장값 초기화", key="reset_saved_inputs", width="stretch"):
+        reset_browser_inputs()
 
 gov_rate = gov_rate_input if override_gov else auto_gov_rate
 newborn_rate = newborn_rate_input if override_newborn else auto_newborn_rate
