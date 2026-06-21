@@ -33,14 +33,16 @@
     <script type="module">
       import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js";
 
+      const appVersion = "yearly-comparison-20260621-1";
+
       mount(
         {
           entrypoint: "app.py",
           files: {
-            "app.py": { url: "./app.py" },
-            "loan_logic.py": { url: "./loan_logic.py" },
-            "scenario_calculator.py": { url: "./scenario_calculator.py" },
-            "format_utils.py": { url: "./format_utils.py" },
+            "app.py": { url: `./app.py?v=${appVersion}` },
+            "loan_logic.py": { url: `./loan_logic.py?v=${appVersion}` },
+            "scenario_calculator.py": { url: `./scenario_calculator.py?v=${appVersion}` },
+            "format_utils.py": { url: `./format_utils.py?v=${appVersion}` },
           },
           requirements: ["pandas"],
           idbfsMountpoints: ["/mnt"],

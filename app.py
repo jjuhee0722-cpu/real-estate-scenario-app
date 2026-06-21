@@ -437,16 +437,17 @@ render_comparison_table([
 ])
 
 st.divider()
-st.markdown("#### ④ 연도별 상환 지출")
+st.markdown("#### ④ 연도별 상환 지출 비교 · 1·5·10·15·20·30·40년차")
 st.caption(
     "해당 연도 상환액은 그해 납부한 원리금이며, 누적 상환액은 대출 시작 후 해당 연도 말까지의 총 납부액입니다. "
+    "1·5·10·15·20·30·40년차를 항상 표시하며, 대출 만기 이후의 해당 연도 상환액은 0원입니다. "
     "초기 현금 투입액과 대환 시 별도 현금 보충액은 포함하지 않습니다."
 )
 max_horizon = max(
     loan_years,
     elapsed_years + newborn_years if refi is not None else 0,
 )
-comparison_years = [year for year in [1, 5, 10, 15, 20, 30, 40] if year <= math.ceil(max_horizon)]
+comparison_years = [1, 5, 10, 15, 20, 30, 40]
 final_year = math.ceil(max_horizon)
 if final_year > 0 and final_year not in comparison_years:
     comparison_years.append(final_year)
