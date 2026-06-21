@@ -2,7 +2,12 @@
 
 import pytest
 
-from scenario_calculator import calculate_refinance, calculate_scenario
+from scenario_calculator import (
+    calculate_refinance,
+    calculate_scenario,
+    cumulative_loan_payments,
+    cumulative_refinance_payments,
+)
 
 
 def make_scenario(**overrides):
@@ -176,3 +181,36 @@ def test_refinance_after_original_term_has_no_balance() -> None:
     assert result["new_principal"] == 0.0
     assert result["new_monthly"] == 0.0
 
+
+def test_cumulative_loan_payments_at_year_checkpoints() -> None:
+    payment = reference_payment(30_000, 0.045, 30)
+    assert cumulative_loan_payments(30_000, 0.045, 30, 5) == pytest.approx(payment * 60)
+    assert cumulative_loan_payments(30_000, 0.045, 30, 40) == pytest.approx(payment * 360)
+
+
+def test_cumulative_loan_payments_with_zero_principal() -> None:
+    assert cumulative_loan_payments(0, 0.0, 30, 10) == 0.0
+
+
+def test_cumulative_refinance_payments_connects_old_and_new_loans() -> None:
+    result = cumulative_refinance_payments(
+        original_monthly=100,
+        original_years=30,
+        refinance_after_years=3,
+        new_monthly=80,
+        new_years=30,
+        elapsed_years=5,
+    )
+    assert result == pytest.approx(100 * 36 + 80 * 24)
+
+
+def test_cumulative_refinance_payments_caps_both_loan_terms() -> None:
+    result = cumulative_refinance_payments(
+        original_monthly=100,
+        original_years=10,
+        refinance_after_years=15,
+        new_monthly=80,
+        new_years=20,
+        elapsed_years=40,
+    )
+    assert result == pytest.approx(100 * 120)

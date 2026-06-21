@@ -94,3 +94,45 @@ def calculate_refinance(
         "old_remaining_interest": old_remaining_interest, "new_interest": new_interest,
         "interest_saving": interest_saving, "total_outflow_saving": total_outflow_saving,
     }
+
+
+def cumulative_loan_payments(
+    principal: float,
+    annual_rate: float,
+    years: float,
+    elapsed_years: float,
+) -> float:
+    """대출 시작 후 경과 시점까지 납부한 누적 원리금."""
+    if principal <= 0 or years <= 0 or elapsed_years <= 0:
+        return 0.0
+    total_months = max(int(round(years * 12)), 0)
+    elapsed_months = max(int(round(elapsed_years * 12)), 0)
+    paid_months = min(elapsed_months, total_months)
+    return monthly_payment(principal, annual_rate, years) * paid_months
+
+
+def cumulative_refinance_payments(
+    *,
+    original_monthly: float,
+    original_years: float,
+    refinance_after_years: float,
+    new_monthly: float,
+    new_years: float,
+    elapsed_years: float,
+) -> float:
+    """대환 전·후 납부액을 연결한 경과 시점 누적 원리금."""
+    if elapsed_years <= 0:
+        return 0.0
+    target_months = max(int(round(elapsed_years * 12)), 0)
+    original_total_months = max(int(round(original_years * 12)), 0)
+    requested_refinance_month = max(int(round(refinance_after_years * 12)), 0)
+    if requested_refinance_month >= original_total_months:
+        return max(original_monthly, 0) * min(target_months, original_total_months)
+    refinance_month = min(
+        requested_refinance_month,
+        original_total_months,
+    )
+    old_paid_months = min(target_months, refinance_month)
+    new_total_months = max(int(round(new_years * 12)), 0)
+    new_paid_months = min(max(target_months - refinance_month, 0), new_total_months)
+    return max(original_monthly, 0) * old_paid_months + max(new_monthly, 0) * new_paid_months

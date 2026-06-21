@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import pandas as pd
 import streamlit as st
@@ -12,7 +13,12 @@ from loan_logic import (
     NEWBORN_SPECIAL_LOAN, POLICY, assess_newborn_eligibility,
     government_loan_eligible, select_government_rate, select_newborn_special_rate,
 )
-from scenario_calculator import calculate_refinance, calculate_scenario
+from scenario_calculator import (
+    calculate_refinance,
+    calculate_scenario,
+    cumulative_loan_payments,
+    cumulative_refinance_payments,
+)
 
 
 st.set_page_config(page_title="부동산 주거 시나리오 비교", page_icon="🏠", layout="wide")
@@ -327,6 +333,14 @@ b = calculate_scenario(
     loan_type="전세금 반환 또는 일반 담보대출", existing_debt_burden_ratio=POLICY["existing_debt_annual_burden_ratio"],
 )
 
+refi = None
+if refinance_enabled:
+    refi = calculate_refinance(
+        principal=a.loan_needed, original_rate=a.annual_rate, original_years=loan_years,
+        elapsed_years=elapsed_years, new_rate=newborn_rate, new_years=newborn_years,
+        prepayment_fee_rate=fee_rate, other_cost=refinance_other_cost, max_new_loan=newborn_max_loan,
+    )
+
 formatters = {"money": lambda v: format_amount(v, 1), "rate": format_rate, "gap": format_gap,
               "monthly": format_monthly, "annual": format_annual, "text": str}
 
@@ -422,6 +436,93 @@ render_comparison_table([
     ("예상 연간 상환액", "annual_payment", "annual"),
 ])
 
+st.divider()
+st.markdown("#### ④ 연도별 상환 지출")
+st.caption(
+    "해당 연도 상환액은 그해 납부한 원리금이며, 누적 상환액은 대출 시작 후 해당 연도 말까지의 총 납부액입니다. "
+    "초기 현금 투입액과 대환 시 별도 현금 보충액은 포함하지 않습니다."
+)
+max_horizon = max(
+    loan_years,
+    elapsed_years + newborn_years if refi is not None else 0,
+)
+comparison_years = [year for year in [1, 5, 10, 15, 20, 30, 40] if year <= math.ceil(max_horizon)]
+final_year = math.ceil(max_horizon)
+if final_year > 0 and final_year not in comparison_years:
+    comparison_years.append(final_year)
+comparison_years.sort()
+
+
+def cumulative_at(year: float, scenario) -> float:
+    return cumulative_loan_payments(
+        scenario.loan_needed, scenario.annual_rate, scenario.loan_years, year
+    )
+
+
+annual_rows = []
+cumulative_rows = []
+chart_rows = []
+for year in comparison_years:
+    a_cumulative = cumulative_at(year, a)
+    b_cumulative = cumulative_at(year, b)
+    a_annual = a_cumulative - cumulative_at(year - 1, a)
+    b_annual = b_cumulative - cumulative_at(year - 1, b)
+    a_label = "A 기존대출 유지" if refi is not None else "시나리오 A"
+    cumulative_row = {
+        "연도": f"{year}년차",
+        a_label: format_amount(a_cumulative, 1),
+    }
+    annual_row = {
+        "연도": f"{year}년차",
+        a_label: format_amount(a_annual, 1),
+    }
+    chart_rows.append({"연도": year, "시나리오": a_label, "누적 상환액(만원)": a_cumulative})
+    if refi is not None:
+        a_refi_cumulative = cumulative_refinance_payments(
+            original_monthly=a.monthly_payment,
+            original_years=loan_years,
+            refinance_after_years=elapsed_years,
+            new_monthly=refi["new_monthly"],
+            new_years=newborn_years,
+            elapsed_years=year,
+        )
+        previous_refi_cumulative = cumulative_refinance_payments(
+            original_monthly=a.monthly_payment,
+            original_years=loan_years,
+            refinance_after_years=elapsed_years,
+            new_monthly=refi["new_monthly"],
+            new_years=newborn_years,
+            elapsed_years=year - 1,
+        )
+        cumulative_row["A 신생아 특례 대환"] = format_amount(a_refi_cumulative, 1)
+        annual_row["A 신생아 특례 대환"] = format_amount(
+            a_refi_cumulative - previous_refi_cumulative, 1
+        )
+        chart_rows.append({
+            "연도": year,
+            "시나리오": "A 신생아 특례 대환",
+            "누적 상환액(만원)": a_refi_cumulative,
+        })
+    cumulative_row["시나리오 B"] = format_amount(b_cumulative, 1)
+    annual_row["시나리오 B"] = format_amount(b_annual, 1)
+    chart_rows.append({
+        "연도": year,
+        "시나리오": "시나리오 B",
+        "누적 상환액(만원)": b_cumulative,
+    })
+    annual_rows.append(annual_row)
+    cumulative_rows.append(cumulative_row)
+
+annual_tab, cumulative_tab = st.tabs(["해당 연도 상환액", "누적 상환액"])
+annual_tab.dataframe(pd.DataFrame(annual_rows).set_index("연도"), width="stretch")
+cumulative_tab.dataframe(pd.DataFrame(cumulative_rows).set_index("연도"), width="stretch")
+st.line_chart(
+    pd.DataFrame(chart_rows),
+    x="연도",
+    y="누적 상환액(만원)",
+    color="시나리오",
+)
+
 st.subheader("비교 차트")
 left, right = st.columns(2)
 with left:
@@ -434,14 +535,8 @@ with right:
 st.subheader("부족·여유자금 비교")
 st.bar_chart(pd.DataFrame({"시나리오": ["시나리오 A", "시나리오 B"], "부족(+)/여유(-), 만원": [a.funding_gap, b.funding_gap]}).set_index("시나리오"))
 
-refi = None
-if refinance_enabled:
+if refi is not None:
     refi_panel = st.expander("👶 신생아 특례대출 대환 결과", expanded=True)
-    refi = calculate_refinance(
-        principal=a.loan_needed, original_rate=a.annual_rate, original_years=loan_years,
-        elapsed_years=elapsed_years, new_rate=newborn_rate, new_years=newborn_years,
-        prepayment_fee_rate=fee_rate, other_cost=refinance_other_cost, max_new_loan=newborn_max_loan,
-    )
     newborn_check = assess_newborn_eligibility(
         combined_income, user_income > 0 and boyfriend_income > 0, combined_assets,
         a.total_need, refi["desired_new_principal"], combined_income, newborn_rate,
