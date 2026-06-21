@@ -95,8 +95,26 @@ st.markdown(
     .section-note {color: #64748b; font-size: .92rem;}
     @media (max-width: 700px) {
         .block-container {padding-top: 1rem; padding-left: 1rem; padding-right: 1rem;}
-        h1 {font-size: 1.75rem !important;}
-        [data-testid="stMetric"] {padding: .8rem .9rem;}
+        h1 {font-size: 1.55rem !important; line-height: 1.25 !important;}
+        h2 {font-size: 1.25rem !important;}
+        h3 {font-size: 1.08rem !important;}
+        .app-kicker {font-size: .78rem;}
+        .app-description {font-size: .9rem; line-height: 1.5;}
+        [data-testid="stMetric"] {
+            padding: .7rem .8rem;
+            border-radius: 12px;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: .82rem !important;
+            line-height: 1.3 !important;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 1.55rem !important;
+            line-height: 1.25 !important;
+            letter-spacing: -.035em;
+            white-space: nowrap;
+        }
+        [data-testid="stMetricDelta"] {font-size: .78rem !important;}
     }
     </style>
     """,
