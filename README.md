@@ -1,5 +1,7 @@
 # 부동산 주거 시나리오 기회비용 비교 계산기
 
+고정 공개 주소: <https://jjuhee0722-cpu.github.io/real-estate-scenario-app/>
+
 화정동 아파트 단독 매수(시나리오 A)와 남자친구 집 전세금 반환 후 입주(시나리오 B)의 자금계획, 대출한도, 월 상환 부담을 비교하는 Streamlit 앱입니다. 시나리오 A는 향후 신생아 특례대출 대환 시뮬레이션도 제공합니다.
 
 ## 설치 및 실행
@@ -36,7 +38,17 @@ ipconfig getifaddr en0
 
 ## 고정 공개 주소 배포
 
-같은 Wi-Fi가 아닌 곳에서도 접속하려면 GitHub 저장소를 Streamlit Community Cloud에 연결해 배포합니다. 저장소 루트의 `requirements.txt`가 배포 환경의 Python 패키지를 설치합니다.
+같은 Wi-Fi가 아닌 곳에서도 접속할 수 있도록 GitHub Pages에서 stlite 기반 브라우저용 Streamlit 앱을 제공합니다. Python 계산 파일을 브라우저의 WebAssembly 환경에서 직접 실행하므로 별도 서버가 필요하지 않습니다.
+
+공개 주소:
+
+```text
+https://jjuhee0722-cpu.github.io/real-estate-scenario-app/
+```
+
+`main` 브랜치에 변경사항을 푸시하면 GitHub Pages가 자동으로 최신 파일을 반영합니다. 첫 접속은 브라우저용 Python 런타임을 내려받기 때문에 잠시 걸릴 수 있습니다.
+
+Streamlit Community Cloud 방식으로 별도 배포하려면 저장소 루트의 `requirements.txt`를 사용할 수 있습니다.
 
 1. 이 프로젝트를 GitHub 저장소에 올립니다.
 2. [Streamlit Community Cloud](https://share.streamlit.io/)에서 GitHub 계정으로 로그인합니다.
